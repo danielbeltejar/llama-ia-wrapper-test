@@ -1,7 +1,8 @@
 import base64
+import io
 import json
 import requests
-
+from PIL import Image
 
 class ImageProcessor:
     def __init__(self, api_url, model="llama3.2-vision", headers=None):
@@ -21,8 +22,12 @@ class ImageProcessor:
         - image_path: Ruta al archivo de la imagen.
         - Retorna: Una cadena codificada en Base64.
         """
-        with open(image_path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode("utf-8")
+        with Image.open(image_path) as img:
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format='JPEG', quality=85)
+            img_byte_arr.seek(0)
+
+            return base64.b64encode(img_byte_arr.read()).decode("utf-8")
 
     def send_request(self, prompt, image_path, stream=False):
         """
@@ -90,10 +95,10 @@ def process_ticket(api_processor, image_path):
     prompt = (
         "Lee el ticket y extrae los datos en formato JSON. "
         "Para cada fila del ticket, devuelve un objeto con los campos: "
+        "- 'quantity': cantidad comprada (un número entero, a la izquierda del nombre del producto. No confundir con el indice de productos), "
         "- 'name': nombre del producto (una cadena de texto limpia sin abreviaturas innecesarias), "
-        "- 'quantity': cantidad comprada (un número flotante), "
         "- 'price_unit': precio por unidad (un número flotante), "
-        "- 'total_price': precio total del producto (un número flotante). "
+        "- 'total_price': precio total del producto (un número flotante, tienes que calcularlo multiplicando quantity con price_unit). "
         "Devuelve el JSON como un array de objetos, sin texto adicional."
     )
     response = api_processor.send_request(prompt, image_path)
