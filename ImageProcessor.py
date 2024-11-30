@@ -4,6 +4,7 @@ import json
 import requests
 from PIL import Image
 
+
 class ImageProcessor:
     def __init__(self, api_url, model="llama3.2-vision", headers=None):
         """
@@ -15,6 +16,18 @@ class ImageProcessor:
         self.api_url = api_url
         self.model = model
         self.headers = headers or {"Content-Type": "application/json"}
+        self.max_pixels = (1120, 1120)
+
+    def resize_image(self, image):
+        """
+        Redimensiona la imagen para que ninguna dimensión supere el tamaño máximo permitido.
+        - image: Objeto PIL.Image.
+        - Retorna: Objeto PIL.Image redimensionado.
+        """
+        if image.size[0] > self.max_pixels[0] or image.size[1] > self.max_pixels[1]:
+            image.thumbnail(self.max_pixels, Image.Resampling.LANCZOS)
+
+        return image
 
     def encode_image(self, image_path):
         """
@@ -23,8 +36,9 @@ class ImageProcessor:
         - Retorna: Una cadena codificada en Base64.
         """
         with Image.open(image_path) as img:
+            img = self.resize_image(img)  # Redimensionar si es necesario
             img_byte_arr = io.BytesIO()
-            img.save(img_byte_arr, format='JPEG', quality=85)
+            img.save(img_byte_arr, format="JPEG", quality=95)
             img_byte_arr.seek(0)
 
             return base64.b64encode(img_byte_arr.read()).decode("utf-8")
@@ -81,7 +95,7 @@ def process_cats(api_processor, image_path):
     - api_processor: Instancia de la clase ImageProcessor.
     - image_path: Ruta al archivo de la imagen.
     """
-    prompt = "Count the number of cats. Output only the number as a int. Be fast please."
+    prompt = "Count the number of cats. Output only the number as a int. Be fast and precise please."
     response = api_processor.send_request(prompt, image_path)
     print("Respuesta de API para gatos:", response)
 
@@ -98,7 +112,6 @@ def process_ticket(api_processor, image_path):
         "- 'quantity': cantidad comprada (un número entero, a la izquierda del nombre del producto. No confundir con el indice de productos), "
         "- 'name': nombre del producto (una cadena de texto limpia sin abreviaturas innecesarias), "
         "- 'price_unit': precio por unidad (un número flotante), "
-        "- 'total_price': precio total del producto (un número flotante, tienes que calcularlo multiplicando quantity con price_unit). "
         "Devuelve el JSON como un array de objetos, sin texto adicional."
     )
     response = api_processor.send_request(prompt, image_path)
@@ -116,7 +129,7 @@ if __name__ == "__main__":
     processor = ImageProcessor(api_url)
 
     # Procesar imágenes
-    # process_cats(processor, "images/cat_5.jpg")
+    process_cats(processor, "images/cat_5.jpg")
 
     # Procesar un ticket para extraer datos
     process_ticket(processor, "images/ticket.jpg")
