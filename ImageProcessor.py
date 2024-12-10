@@ -60,6 +60,7 @@ class ImageProcessor:
             "stream": stream,
             "format": "json",
             "images": [encoded_image],
+            "verbose": False
         }
 
         response = requests.post(self.api_url, data=json.dumps(payload), headers=self.headers)
@@ -95,7 +96,7 @@ def process_cats(api_processor, image_path):
     - api_processor: Instancia de la clase ImageProcessor.
     - image_path: Ruta al archivo de la imagen.
     """
-    prompt = "Count the number of cats. Output only the number as a int. Be fast and precise please."
+    prompt = "Count the number of cats. Output only the number as a int. Be fast and precise please. JSON output."
     response = api_processor.send_request(prompt, image_path)
     print("Respuesta de API para gatos:", response)
 
