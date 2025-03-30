@@ -1,12 +1,15 @@
 import base64
 import io
 import json
+import time
+from typing import Dict, Optional, Union
+
 import requests
 from PIL import Image
 
 
 class ImageProcessor:
-    def __init__(self, api_url, model="llama3.2-vision", headers=None):
+    def __init__(self, api_url: str, model: str = "gemma3:12b", headers: Optional[Dict[str, str]] = None):
         """
         Inicializa el procesador de imágenes.
         - api_url: URL del endpoint de la API.
@@ -18,7 +21,7 @@ class ImageProcessor:
         self.headers = headers or {"Content-Type": "application/json"}
         self.max_pixels = (1120, 1120)
 
-    def resize_image(self, image):
+    def resize_image(self, image: Image.Image) -> Image.Image:
         """
         Redimensiona la imagen para que ninguna dimensión supere el tamaño máximo permitido.
         - image: Objeto PIL.Image.
@@ -29,7 +32,7 @@ class ImageProcessor:
 
         return image
 
-    def encode_image(self, image_path):
+    def encode_image(self, image_path: str) -> str:
         """
         Codifica una imagen en formato Base64.
         - image_path: Ruta al archivo de la imagen.
@@ -43,7 +46,7 @@ class ImageProcessor:
 
             return base64.b64encode(img_byte_arr.read()).decode("utf-8")
 
-    def send_request(self, prompt, image_path, stream=False):
+    def send_request(self, prompt: str, image_path: str, stream: bool = False) -> Dict[str, Union[Dict, float]]:
         """
         Envía una solicitud a la API con el prompt y la imagen proporcionados.
         - prompt: Texto que describe la tarea a realizar.
@@ -51,7 +54,6 @@ class ImageProcessor:
         - stream: Bandera para habilitar transmisión en tiempo real (por defecto False).
         - Retorna: Respuesta procesada de la API.
         """
-        # Codificar la imagen en Base64
         encoded_image = self.encode_image(image_path)
 
         payload = {
@@ -63,12 +65,16 @@ class ImageProcessor:
             "verbose": False
         }
 
+        start_time = time.time()
         response = requests.post(self.api_url, data=json.dumps(payload), headers=self.headers)
+        end_time = time.time()
 
-        return self.handle_response(response)
+        response_time = end_time - start_time
+
+        return {"response": self.handle_response(response), "response_time": response_time}
 
     @staticmethod
-    def handle_response(response):
+    def handle_response(response: requests.Response) -> Union[Dict, str]:
         """
         Procesa la respuesta de la API.
         - response: Objeto de respuesta HTTP.
@@ -90,47 +96,65 @@ class ImageProcessor:
             return {"error": response.status_code, "details": response.text}
 
 
-def process_cats(api_processor, image_path):
+def process_cats(api_processor: ImageProcessor, image_path: str) -> None:
     """
     Procesa una imagen de gatos para contar cuántos hay.
     - api_processor: Instancia de la clase ImageProcessor.
     - image_path: Ruta al archivo de la imagen.
     """
-    prompt = "Count the number of cats. Output only the number as a int. Be fast and precise please. JSON output."
-    response = api_processor.send_request(prompt, image_path)
-    print("Respuesta de API para gatos:", response)
+    prompt = "计算猫的数量。仅输出整数数字。请快速准确。JSON 输出。"
+    result: Dict = api_processor.send_request(prompt, image_path)
+    response = result["response"]
+    response_time = result["response_time"]
+
+    print("Respuesta de API para gatos:", json.dumps(json.loads(response), indent=4, ensure_ascii=False))
+    print(f"Tiempo de respuesta: {response_time:.3f} segundos")
 
 
-def process_ticket(api_processor, image_path):
+def process_ticket(api_processor: ImageProcessor, image_path: str) -> None:
     """
     Procesa un ticket para extraer datos estructurados en formato JSON.
     - api_processor: Instancia de la clase ImageProcessor.
     - image_path: Ruta al archivo de la imagen.
     """
     prompt = (
-        "Lee el ticket y extrae los datos en formato JSON. "
-        "Para cada fila del ticket, devuelve un objeto con los campos: "
-        "- 'quantity': cantidad comprada (un número entero, a la izquierda del nombre del producto. No confundir con el indice de productos), "
-        "- 'name': nombre del producto (una cadena de texto limpia sin abreviaturas innecesarias), "
-        "- 'price_unit': precio por unidad (un número flotante), "
-        "Devuelve el JSON como un array de objetos, sin texto adicional."
-    )
-    response = api_processor.send_request(prompt, image_path)
+        """
+        Lee ticket extrae datos formato JSON. 
+        productos devuelve objeto 
+        quantity ' cantidad comprada número entero izquierda nombre. no indice productos 
+        name ' nombre producto cadena texto limpia 
+        price _ unit ' precio por unidad número flotante 
+        Devuelve JSON array objetos sin texto adicional. 
+        """)
 
-    if isinstance(response, dict):
-        print("Respuesta de API para ticket:", json.dumps(response, indent=4, ensure_ascii=False))
-    else:
-        print("Respuesta de API para ticket:", response)
+    result: Dict = api_processor.send_request(prompt, image_path)
+    response = result["response"]
+    response_time = result["response_time"]
+
+    calculate_totals((json.loads(response)))
+    print(f"Tiempo de respuesta: {response_time:.3f} segundos")
+
+
+def calculate_totals(json_data: Dict[str, Dict]) -> None:
+    """
+    Calcula el precio total por producto y el total general.
+    - json_data: Datos en formato JSON que contienen productos con precio y cantidad.
+    """
+    key = list(json_data.keys())[0]
+    products = json_data[key]
+
+    total_general = 0
+
+    for product in products:
+        product["price_total"] = product["quantity"] * product["price_unit"]
+        total_general += product["price_total"]
+
+    print("Detalles con precio total por producto:")
+    print(json.dumps(products, indent=4, ensure_ascii=False))
+    print(f"Total general: {total_general:.2f}")
 
 
 if __name__ == "__main__":
-    # URL del endpoint de la API
-    api_url = "http://ollama.server.local:11434/api/generate"
-
-    processor = ImageProcessor(api_url)
-
-    # Procesar imágenes
+    processor = ImageProcessor("http://ollama.lab.server.local/api/generate")
     process_cats(processor, "images/cat_5.jpg")
-
-    # Procesar un ticket para extraer datos
     process_ticket(processor, "images/ticket.jpg")
